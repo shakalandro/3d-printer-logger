@@ -3,6 +3,7 @@
 from settings import *
 import time, json, httplib, os, atexit, thread
 import RPi.GPIO as io
+import time
 from evdev import InputDevice, list_devices, categorize, ecodes
 from parse_rest.connection import register
 from parse_rest.datatypes import Object, Function
@@ -16,7 +17,10 @@ KEYCODES = {
 	'KEY_5': '5', 'KEY_6': '6', 'KEY_7': '7', 'KEY_8': '8', 'KEY_9': '9'
 }
 
-class CoffeeLog(Object):
+ALLOW_TIME_BUMPS = True
+BUMP_INCREMENT = 60 * 60 * 1;
+
+class PrinterLog(Object):
     pass
 
 def get_scanner_device():
@@ -44,7 +48,7 @@ def cleanup(device):
 	io.output(POWER_PIN, False)
 
 def log(badgenum):
-	newlog = CoffeeLog(badge_num=badgenum, time=time.strftime("%Y-%m-%d %H:%M:%S"), machine=MACHINE)
+	newlog = PrinterLog(badge_num=badgenum, time=time.strftime("%Y-%m-%d %H:%M:%S"))
 	newlog.save()
 
 def get_input(device):
@@ -63,13 +67,23 @@ if __name__ == "__main__":
 		print "Device not found! Exiting!"
 
 	init(device)
+        started = 0
+        allowed = 0
 	while True:
 		try: 
-			badgenum = int(get_input(device))
-			io.output(POWER_PIN, True)
-			thread.start_new_thread(log, (badgenum,))
-			time.sleep(60)
-			io.output(POWER_PIN, False)
-		except ValueError:
-			time.sleep(0.1)
+                        badgenum = int(get_input(device))
+                        if allowed == 0:
+                                io.output(POWER_PIN, True)
+                                started = time.time()
+                        allowed += BUMP_INCREMENT                        
+                except ValueError:
+                        time.sleep(0.1)
+                if (time.time() - started) < allowed:
+                        io.output(POWER_PIN, True)
+                        thread.start_new_thread(log, (badgenum,))
+                else:
+                        io.output(POWER_PIN, False)
+                        allowed = 0
+                        started = 0
+        
 
