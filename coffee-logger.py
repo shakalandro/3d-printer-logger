@@ -4,6 +4,7 @@ from settings import *
 import time, json, httplib, os, atexit, thread
 import RPi.GPIO as io
 import time
+import datetime
 from evdev import InputDevice, list_devices, categorize, ecodes
 from parse_rest.connection import register
 from parse_rest.datatypes import Object, Function
@@ -47,8 +48,11 @@ def cleanup(device):
 	device.ungrab()
 	io.output(POWER_PIN, False)
 
-def log(badgenum):
-	newlog = PrinterLog(badge_num=badgenum, time=time.strftime("%Y-%m-%d %H:%M:%S"))
+def log(badgenum, sequence_num, allowed):
+        ts = time.time()
+        ts_str = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
+        print("%d: %s, %d\n" % (badgenum, ts_str, sequence_num))
+	newlog = PrinterLog(badge_num=badgenum, time=ts, time_str=ts_str, sequence_number=sequence_num, allowed_time=allowed)
 	newlog.save()
 
 def get_input(device):
@@ -69,21 +73,24 @@ if __name__ == "__main__":
 	init(device)
         started = 0
         allowed = 0
+        sequence_num = 0
 	while True:
 		try: 
                         badgenum = int(get_input(device))
                         if allowed == 0:
                                 io.output(POWER_PIN, True)
                                 started = time.time()
-                        allowed += BUMP_INCREMENT                        
+                        allowed += BUMP_INCREMENT    
+                        sequence_num += 1
                 except ValueError:
                         time.sleep(0.1)
                 if (time.time() - started) < allowed:
                         io.output(POWER_PIN, True)
-                        thread.start_new_thread(log, (badgenum,))
+                        thread.start_new_thread(log, (badgenum,sequence_num,allowed))
                 else:
                         io.output(POWER_PIN, False)
                         allowed = 0
                         started = 0
+                        sequence_num = 0
         
 
